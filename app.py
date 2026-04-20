@@ -12,8 +12,34 @@ HISTORY_API = "https://8ceb8k79sf.execute-api.ap-south-1.amazonaws.com/v1/sisyph
 
 
 def call_api(url, payload):
-    """Make API call and unwrap nested body responses."""
+    """Make POST API call and unwrap nested body responses."""
     resp = requests.post(url, json=payload, headers={"Content-Type": "application/json"}, timeout=60)
+    data = resp.json()
+    while isinstance(data.get("body"), str):
+        try:
+            data = json.loads(data["body"])
+        except (json.JSONDecodeError, TypeError):
+            break
+    return data
+
+
+def call_get_api(url, params=None):
+    """Make GET API call and unwrap nested body responses."""
+    resp = requests.get(url, params=params, headers={"Content-Type": "application/json"}, timeout=60)
+    print(f"GET {url} params={params} status={resp.status_code} response={resp.text[:500]}")
+    data = resp.json()
+    while isinstance(data.get("body"), str):
+        try:
+            data = json.loads(data["body"])
+        except (json.JSONDecodeError, TypeError):
+            break
+    return data
+
+
+def call_delete_api(url, params=None):
+    """Make DELETE API call and unwrap nested body responses."""
+    resp = requests.delete(url, params=params, headers={"Content-Type": "application/json"}, timeout=60)
+    print(f"DELETE {url} params={params} status={resp.status_code} response={resp.text[:500]}")
     data = resp.json()
     while isinstance(data.get("body"), str):
         try:
@@ -260,22 +286,24 @@ if "chats_loaded" not in st.session_state:
 
 def load_chat_list():
     try:
-        data = call_api(HISTORY_API, {"action": "get_chats"})
+        data = call_get_api(HISTORY_API, {"action": "get_chats"})
         st.session_state.chat_list = data.get("chats", [])
-    except Exception:
+    except Exception as e:
+        print(f"Error loading chat list: {e}")
         st.session_state.chat_list = []
     st.session_state.chats_loaded = True
 
 
 def load_chat_history(chat_id):
     try:
-        data = call_api(HISTORY_API, {"action": "get_history", "chat_id": chat_id})
+        data = call_get_api(HISTORY_API, {"action": "get_history", "chat_id": chat_id})
         st.session_state.messages = [
             {"role": m["role"], "content": m["content"]}
             for m in data.get("messages", [])
         ]
         st.session_state.chat_id = chat_id
-    except Exception:
+    except Exception as e:
+        print(f"Error loading chat history: {e}")
         st.session_state.messages = []
 
 
@@ -286,7 +314,7 @@ def start_new_chat():
 
 def delete_chat(chat_id):
     try:
-        call_api(HISTORY_API, {"action": "delete_chat", "chat_id": chat_id})
+        call_delete_api(HISTORY_API, {"chat_id": chat_id})
     except Exception:
         pass
     if st.session_state.chat_id == chat_id:
